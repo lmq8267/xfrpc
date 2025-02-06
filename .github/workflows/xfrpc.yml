@@ -148,7 +148,9 @@ jobs:
            [官方源码](https://github.com/liudf0716/xfrpc)
            
           tag_name: ${{env.tag}}
-          files: bin/*
+          files: |
+            bin/xfrpc-${{ matrix.target }}
+            bin/xfrpc-${{ matrix.target }}_upx
   del:
     runs-on: ubuntu-latest
     steps:
