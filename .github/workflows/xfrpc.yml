@@ -124,7 +124,7 @@ jobs:
 
          if [[ "${{ matrix.target }}" == *windows* ]]; then
             echo "检测到Windows目标，移除-rdynamic标志"
-            echo 'if(WIN32) message(STATUS "Windows build: removing -rdynamic") set(CMAKE_EXE_LINKER_FLAGS "") set(CMAKE_SHARED_LINKER_FLAGS "") set(CMAKE_SHARED_LIBRARY_LINK_C_FLAGS "") set(CMAKE_SHARED_LIBRARY_LINK_CXX_FLAGS "") endif()' >> CMakeLists.txt
+            echo -e "if(WIN32)\n  message(STATUS \"Windows build: removing -rdynamic\")\n  set(CMAKE_EXE_LINKER_FLAGS \"\")\n  set(CMAKE_SHARED_LINKER_FLAGS \"\")\n  set(CMAKE_SHARED_LIBRARY_LINK_C_FLAGS \"\")\n  set(CMAKE_SHARED_LIBRARY_LINK_CXX_FLAGS \"\")\nendif()" >> CMakeLists.txt
          fi
          mkdir -p bin && cd bin
          cmake -DTHIRDPARTY_STATIC_BUILD=YES \
