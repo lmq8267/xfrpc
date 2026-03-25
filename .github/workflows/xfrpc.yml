@@ -120,10 +120,19 @@ jobs:
          mkdir -p bin && cd bin
          # 判断是否为 Windows 目标
          if [[ "${{ matrix.target }}" == *windows* ]]; then
-            echo "Windows 目标编译，要设置 CMake SYSTEM_NAME 以免添加 -rdynamic"
-            sed -i 's|-DCMAKE_C_COMPILER=${CROSS_C_COMPILER} -DOPENSSL_ROOT_DIR|-DCMAKE_C_COMPILER=${CROSS_C_COMPILER} -DCMAKE_SYSTEM_NAME=Windows -DCMAKE_SHARED_LIBRARY_LINK_C_FLAGS="" -DOPENSSL_ROOT_DIR|g' ../thirdparty/CMakeLists.txt  
+            echo "Windows 目标编译，强制所有第三方库静态构建"  
+            # 修复 libevent  
+            sed -i 's|-DCMAKE_C_COMPILER=${CROSS_C_COMPILER} -DOPENSSL_ROOT_DIR|-DCMAKE_C_COMPILER=${CROSS_C_COMPILER} -DCMAKE_SYSTEM_NAME=Windows -DCMAKE_SHARED_LIBRARY_LINK_C_FLAGS="" -DOPENSSL_ROOT_DIR|g' ../thirdparty/CMakeLists.txt
             sed -i 's|COMMAND cmake -DCMAKE_C_COMPILER=${CROSS_C_COMPILER} \.\.|COMMAND cmake -DCMAKE_C_COMPILER=${CROSS_C_COMPILER} -DCMAKE_SYSTEM_NAME=Windows -DCMAKE_SHARED_LIBRARY_LINK_C_FLAGS="" -DEVENT__LIBRARY_TYPE=STATIC ..|g' ../thirdparty/CMakeLists.txt
-            # 确保 libevent 链接 crypt32  
+    
+            # 修复 json-c - 强制只构建静态库
+            sed -i 's|COMMAND cmake -DCMAKE_C_COMPILER=${CROSS_C_COMPILER} \.\.|COMMAND cmake -DCMAKE_C_COMPILER=${CROSS_C_COMPILER} -DCMAKE_SYSTEM_NAME=Windows -DCMAKE_SHARED_LIBRARY_LINK_C_FLAGS="" -DBUILD_SHARED_LIBS=OFF ..|g' ../thirdparty/CMakeLists.txt
+    
+            # 直接修改各库的 CMakeLists.txt 确保静态构建  
+            sed -i 's|set(EVENT_LIBRARY_TYPE BOTH)|set(EVENT_LIBRARY_TYPE STATIC)|g' ../thirdparty/libevent-2.1.10/CMakeLists.txt  
+            sed -i 's|option(BUILD_SHARED_LIBS  "Default to building shared libraries" ON)|option(BUILD_SHARED_LIBS  "Default to building shared libraries" OFF)|g' ../thirdparty/json-c/CMakeLists.txt
+    
+            # 确保 crypt32 链接  
             sed -i 's|-lws2_32 -lgdi32|-lws2_32 -lgdi32 -lcrypt32|g' ../thirdparty/libevent-2.1.10/CMakeLists.txt
             cmake -DTHIRDPARTY_STATIC_BUILD=YES \
               -DCMAKE_SYSTEM_NAME=Windows \
