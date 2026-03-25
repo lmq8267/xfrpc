@@ -122,15 +122,12 @@ jobs:
          sed -i 's|dl pthread|dl pthread json-c atomic ${PROJECT_SOURCE_DIR}/thirdparty/libs/libz.a ${PROJECT_SOURCE_DIR}/thirdparty/libs/libcrypto.a|g' CMakeLists.txt
          sed -i '/${PROJECT_SOURCE_DIR}\/thirdparty\/include\/libevent/i ${PROJECT_SOURCE_DIR}/thirdparty/zlib-1.2.13/' CMakeLists.txt
 
-         # Windows目标移除-rdynamic标志
-         echo -e "if(WIN32)\n  message(STATUS \"Windows build: removing -rdynamic\")\n  set(CMAKE_EXE_LINKER_FLAGS \"\")\n  set(CMAKE_SHARED_LINKER_FLAGS \"\")\n  set(CMAKE_SHARED_LIBRARY_LINK_C_FLAGS \"\")\n  set(CMAKE_SHARED_LIBRARY_LINK_CXX_FLAGS \"\")\nendif()" >> CMakeLists.txt
-         
          mkdir -p bin && cd bin
          cmake -DTHIRDPARTY_STATIC_BUILD=YES \
            -DCMAKE_ARCH_FLAG="${{ matrix.ARCH_FLAG }}" \
            -DCMAKE_C_FLAGS="-Os -ffunction-sections -fdata-sections $CFLAGS" \
            -DCMAKE_CXX_FLAGS="-Os -ffunction-sections -fdata-sections $CXXFLAGS" \
-           -DCMAKE_EXE_LINKER_FLAGS="-Wl,--gc-sections $LDFLAGS" \
+           -DCMAKE_EXE_LINKER_FLAGS="-Wl,--gc-sections $LDFLAGS -static" \
            -DCROSS_C_COMPILER=$CC ..
          make
          $STRIP xfrpc || $STRIP xfrpc.exe || true
