@@ -96,7 +96,7 @@ jobs:
         - target: arm64-windows
           os: ubuntu-latest
           URL: aarch64-w64-mingw32
-          ARCH_FLAG: "mingwarm64"
+          ARCH_FLAG: "mingw64"
 
     runs-on: ${{ matrix.os }}
     steps:
