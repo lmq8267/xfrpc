@@ -120,14 +120,24 @@ jobs:
          mkdir -p bin && cd bin
          # 判断是否为 Windows 目标
          if [[ "${{ matrix.target }}" == *windows* ]]; then
-            echo "Windows 目标编译，设置 CMake SYSTEM_NAME 并清空 -rdynamic"
-            cmake -DTHIRDPARTY_STATIC_BUILD=YES \
-              -DCMAKE_SYSTEM_NAME=Windows \
-              -DCMAKE_ARCH_FLAG="${{ matrix.ARCH_FLAG }}" \
-              -DCMAKE_C_FLAGS="-Os -ffunction-sections -fdata-sections $CFLAGS" \
-              -DCMAKE_CXX_FLAGS="-Os -ffunction-sections -fdata-sections $CXXFLAGS" \
-              -DCMAKE_EXE_LINKER_FLAGS="" \
-              -DCROSS_C_COMPILER=$CC ..
+            echo "Windows 目标编译，要设置 CMake SYSTEM_NAME 并清空 -rdynamic"
+            export ARCH_FLAG=${{ matrix.ARCH_FLAG }}
+            export CROSS_C_COMPILER=$CC
+            
+             # 创建 toolchain 文件
+             echo "set(CMAKE_SYSTEM_NAME Windows)" > toolchain-windows.cmake
+             echo "set(CMAKE_ARCH_FLAG \${ARCH_FLAG})" >> toolchain-windows.cmake
+             echo "set(CMAKE_C_COMPILER \${CROSS_C_COMPILER})" >> toolchain-windows.cmake
+             echo "set(CMAKE_CXX_COMPILER \${CROSS_C_COMPILER})" >> toolchain-windows.cmake
+             echo "set(CMAKE_EXE_LINKER_FLAGS \"-Wl,--gc-sections ${LDFLAGS}\")" >> toolchain-windows.cmake
+             echo "set(CMAKE_SHARED_LINKER_FLAGS \"\")" >> toolchain-windows.cmake
+
+             cmake -DTHIRDPARTY_STATIC_BUILD=YES \
+                -DCMAKE_TOOLCHAIN_FILE=toolchain-windows.cmake \
+                -DCMAKE_C_FLAGS="-Os -ffunction-sections -fdata-sections $CFLAGS" \
+                -DCMAKE_CXX_FLAGS="-Os -ffunction-sections -fdata-sections $CXXFLAGS" \
+                -DOPENSSL_ROOT_DIR=${PROJECT_SOURCE_DIR}/thirdparty/openssl-1.1.1m \
+                ..
          else
             echo "非 Windows 目标，保持原有 Linux 编译选项"
             cmake -DTHIRDPARTY_STATIC_BUILD=YES \
