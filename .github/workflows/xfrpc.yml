@@ -81,6 +81,23 @@ jobs:
           URL: mips-linux-muslsf
           ARCH_FLAG: linux-mips32
 
+        # Windows
+        - target: x86_64-windows
+          os: ubuntu-latest
+          URL: x86_64-w64-mingw32
+          ARCH_FLAG: "mingw64"
+          
+        - target: i686-windows
+          os: ubuntu-latest
+          MSVC_ARCH: x86
+          URL: i686-w64-mingw32
+          ARCH_FLAG: "mingw"
+          
+        - target: arm64-windows
+          os: ubuntu-latest
+          URL: aarch64-w64-mingw32
+          ARCH_FLAG: "mingwarm64"
+
     runs-on: ${{ matrix.os }}
     steps:
      - name: Checkout code
@@ -107,8 +124,8 @@ jobs:
          mkdir -p bin && cd bin
          cmake -DTHIRDPARTY_STATIC_BUILD=YES -DCMAKE_ARCH_FLAG="${{ matrix.ARCH_FLAG }}" -DCROSS_C_COMPILER=$CC ..
          make
-         $STRIP xfrpc
-         file xfrpc
+         $STRIP xfrpc || $STRIP xfrpc.exe || true
+         file xfrpc || file xfrpc.exe || true
      - name: 安装 UPX
        uses: crazy-max/ghaction-upx@v3
        with:
@@ -117,9 +134,9 @@ jobs:
      - name: 压缩
        run: |
         cd bin
-        cp xfrpc xfrpc-${{ matrix.target }}_upx
-        mv xfrpc xfrpc-${{ matrix.target }}
-        upx --lzma --best xfrpc-${{ matrix.target }}_upx 
+        cp xfrpc xfrpc-${{ matrix.target }}_upx || cp xfrpc.exe xfrpc-${{ matrix.target }}_upx.exe || true
+        mv xfrpc xfrpc-${{ matrix.target }} || mv xfrpc.exe xfrpc-${{ matrix.target }}.exe || true
+        upx --lzma --best xfrpc-${{ matrix.target }}_upx || upx --lzma --best xfrpc-${{ matrix.target }}_upx.exe || true
         
      - uses: actions/upload-artifact@v4
        with:
@@ -153,6 +170,8 @@ jobs:
           files: |
             bin/xfrpc-${{ matrix.target }}
             bin/xfrpc-${{ matrix.target }}_upx
+            bin/xfrpc-${{ matrix.target }}.exe
+            bin/xfrpc-${{ matrix.target }}_upx.exe
   del:
     runs-on: ubuntu-latest
     steps:
