@@ -109,18 +109,18 @@ jobs:
 
     - name: 恢复依赖库编译缓存
       id: cache-sysroot
-      uses: actions/cache@v4
+      uses: actions/cache@main
       with:
         path: /tmp/sysroot
-        key: xfrpc-sysroot-${{ matrix.target }}-${{ hashFiles('.github/workflows/xfrpc.yml') }}
-        restore-keys: |
-          xfrpc-sysroot-${{ matrix.target }}
+        key: xfrpc-sysroot-${{ matrix.target }}-${{ env.ZLIB_VER }}-${{ env.OPENSSL_VER }}-${{ env.NGTCP2_VER }}-${{ env.JSONC_VER }}-${{ env.LIBEVENT_VER }}
 
     - name: 交叉编译所有依赖库 (zlib + OpenSSL + ngtcp2 + json-c + libevent)
       if: steps.cache-sysroot.outputs.cache-hit != 'true'
       id: build-deps
       run: |
         SYSROOT=/tmp/sysroot
+        # 版本变化时 restore-keys 可能带出旧版 sysroot，先清空，避免新旧库混用
+        rm -rf $SYSROOT
         mkdir -p $SYSROOT
 
         # 从交叉编译器获取目标三元组（仅用于日志）
@@ -218,7 +218,9 @@ jobs:
         cmake -B build -DCMAKE_C_COMPILER=$CC \
           -DCMAKE_INSTALL_PREFIX=$SYSROOT \
           -DBUILD_SHARED_LIBS=OFF \
-          -DBUILD_TESTS=OFF -DDISABLE_BSYMBOLIC=ON \
+          -DBUILD_STATIC_LIBS=ON \
+          -DBUILD_TESTING=OFF -DBUILD_APPS=OFF \
+          -DDISABLE_WERROR=ON -DDISABLE_BSYMBOLIC=ON \
           -DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY \
           -DCMAKE_C_FLAGS="$COMMON_CFLAGS"
         cmake --build build -j$(nproc)
@@ -235,8 +237,11 @@ jobs:
           curl -sL https://github.com/libevent/libevent/releases/download/${{ env.LIBEVENT_TAG }}/libevent-${{ env.LIBEVENT_VER }}-stable.tar.gz | \
           tar xz -C libevent-src --strip-components=1
         cd libevent-src
+        # libevent 2.1.13-stable 仍声明 cmake_minimum_required(VERSION 3.1)，
+        # 而 ubuntu-latest 已带 CMake 4.x（4.x 移除了对 <3.5 的兼容）
         cmake -B build -DCMAKE_C_COMPILER=$CC \
           -DCMAKE_INSTALL_PREFIX=$SYSROOT \
+          -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
           -DBUILD_SHARED_LIBS=OFF \
           -DEVENT__DISABLE_TESTS=ON -DEVENT__DISABLE_SAMPLES=ON -DEVENT__DISABLE_REGRESS=ON \
           -DCMAKE_SHARED_LIBRARY_LINK_C_FLAGS="" \
@@ -267,7 +272,6 @@ jobs:
         SYSROOT=/tmp/sysroot
         mkdir -p bin && cd bin
 
-        # 构建完整的编译标志（上游有 -Werror，需加 -Wno-* 绕过假阳性）
         COMMON_CFLAGS="-I${SYSROOT}/include -Os -ffunction-sections -fdata-sections -Wno-error=array-bounds"
         COMMON_LDFLAGS="-L${SYSROOT}/lib -Wl,--gc-sections"
 
@@ -275,7 +279,12 @@ jobs:
           -DCMAKE_C_COMPILER=$CC \
           -DCMAKE_C_FLAGS="$COMMON_CFLAGS $CFLAGS" \
           -DCMAKE_EXE_LINKER_FLAGS="$COMMON_LDFLAGS $LDFLAGS -Wl,--start-group" \
+          -DCMAKE_SYSTEM_NAME=Linux \
           -DCMAKE_FIND_ROOT_PATH=$SYSROOT \
+          -DCMAKE_FIND_ROOT_PATH_MODE_PROGRAM=NEVER \
+          -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=ONLY \
+          -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY \
+          -DBUILD_STATIC=ON \
           -DUSE_WOLFSSL=OFF \
           -DLIBEVENT_INCLUDE_DIR=$SYSROOT/include \
           -DLIBEVENT_LIB=$SYSROOT/lib/libevent.a \
@@ -294,6 +303,10 @@ jobs:
           -DNGTCP2_LIB=$SYSROOT/lib/libngtcp2.a \
           -DNGTCP2_INCLUDE_DIR=$SYSROOT/include \
           ..
+
+        grep -rq -- '-DHAVE_NGTCP2' CMakeFiles/xfrpc.dir/ || {
+          echo "错误: QUIC 未启用，请检查 libngtcp2 / libngtcp2_crypto_ossl 是否编译并安装到 sysroot"; exit 1;
+        }
 
         make -j$(nproc)
         $STRIP xfrpc
@@ -383,10 +396,11 @@ jobs:
         echo "---" >> $GITHUB_STEP_SUMMARY
         echo "> 🤖 由 GitHub Actions 自动编译 | 源码: liudf0716/xfrpc@${{ env.branch }}" >> $GITHUB_STEP_SUMMARY
 
-    - uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@main
       with:
         name: xfrpc-${{ env.branch }}-${{ matrix.target }}
         path: bin/*
+        retention-days: 1
 
     - name: 打包 (准备 Release)
       if: github.event.inputs.rel == 'true'
@@ -421,7 +435,6 @@ jobs:
 
          ### 构建信息
 
-         - **架构**: ${{ matrix.target }}
          - **链接方式**: 完全静态 (musl)
          - **TLS 后端**: OpenSSL ${{ env.OPENSSL_VER }}
          - **QUIC 传输**: ngtcp2 ${{ env.NGTCP2_VER }}
@@ -433,8 +446,8 @@ jobs:
 
          | 文件 | 说明 |
          |------|------|
-         | \`xfrpc-${{ matrix.target }}\` | 原始编译二进制（strip 后），可直接运行 |
-         | \`xfrpc-${{ matrix.target }}_upx\` | UPX --lzma --best 压缩版，体积更小 |
+         | \`xfrpc-目标架构\` | 原始编译二进制（strip 后），可直接运行 |
+         | \`xfrpc-目标架构_upx\` | UPX --lzma --best 压缩版，体积更小 |
 
          > 两者功能完全相同，**二选一下载即可**。UPX 版首次运行时会自动解压。
          > 下载后请先执行 \`chmod +x xfrpc-*\` 赋予执行权限。
