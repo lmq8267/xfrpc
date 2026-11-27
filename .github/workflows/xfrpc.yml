@@ -24,7 +24,7 @@ on:
 env:
   # 依赖库版本 - 统一在此修改
   ZLIB_VER: 1.3.1
-  OPENSSL_VER: 3.5.7
+  OPENSSL_VER: 3.5.9
   JSONC_VER: 0.19
   JSONC_TAG: json-c-0.19-20260627
   LIBEVENT_VER: 2.1.13
